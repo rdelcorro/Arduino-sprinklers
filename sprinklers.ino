@@ -8,7 +8,8 @@ const char* MQTT_SERVER_IP = "192.168.0.4";
 const char* SWITCH_TOPIC_FORMAT = "/sprinklers/switch";
 const char* SWITCH_CONFIRM_TOPIC_FORMAT = "/sprinklers/switchConfirm";
 const char* SWITCH_AVAILABLE_TOPIC = "/sprinklers/available/";
-const int FAILSAFE_TIME_LIMIT = 1; // Force a time limit (in munutes) just in case we loose the connection
+String REBOOT_TOPIC = "/sprinklers/forceReboot";
+const int FAILSAFE_TIME_LIMIT = 25; // Force a time limit (in munutes) just in case we loose the connection
 
 /* Define in private.h
 const char* WIFI_SSID 
@@ -30,6 +31,7 @@ unsigned long sprinklerStartTime;
 
 void setupWifi() {
   WiFi.mode(WIFI_STA);
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   while (WiFi.status() != WL_CONNECTED) {
@@ -71,23 +73,25 @@ void setupMQTT() {
     Serial.printf("Subscribing to topic %s\n", topic.c_str());
     mqtt.subscribe(topic);
   }
-}
 
-void setup() {
-  Serial.begin(115200);
-  
-  setupWifi();
-  setupOTAUpdater();
-  setupMQTT();
-  
-  for (int i=0; i < sizeof(switchOutputPins)/sizeof(int); ++i) {
-    pinMode(switchOutputPins[i], OUTPUT); 
-    digitalWrite(switchOutputPins[i], LOW);
-  }
+  mqtt.subscribe(REBOOT_TOPIC);
 
   // Send the available message
   Serial.printf("Sending the available message, %s\n", SWITCH_AVAILABLE_TOPIC);
   mqtt.publish(SWITCH_AVAILABLE_TOPIC, "online", true, 2);
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  for (int i=0; i < sizeof(switchOutputPins)/sizeof(int); ++i) {
+    pinMode(switchOutputPins[i], OUTPUT); 
+    digitalWrite(switchOutputPins[i], LOW);
+  }
+  
+  setupWifi();
+  setupOTAUpdater();
+  setupMQTT();
 }
 
 void publishConfirmation(const String& targetConfirmationTopic, const String& payload) {
@@ -107,16 +111,29 @@ void checkFailsafe() {
   }
 }
 
+void checkConnection() {
+  if (WiFi.status() != WL_CONNECTED || !mqtt.connected()) {
+    setupWifi();
+    setupOTAUpdater();
+    setupMQTT();
+  }
+}
+
 
 void loop() {
   mqtt.loop();
   ArduinoOTA.handle();
   delay(10); // WIFI is more stable with this
   checkFailsafe();
+  checkConnection();
 }
 
 void mqttCb(String& topic, String& payload) {
   Serial.printf("Topic updated: %s, payload: %s\n", topic.c_str(), payload.c_str());
+  if (topic == REBOOT_TOPIC) {
+    ESP.restart();
+  }
+  
   for (int i=0; i < sizeof(switchOutputPins)/sizeof(int); ++i) {
     const String targetTopic = buildTopic(i, SWITCH_TOPIC_FORMAT);
     if (targetTopic == topic) {
