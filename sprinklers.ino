@@ -9,7 +9,7 @@ const char* SWITCH_TOPIC_FORMAT = "/sprinklers/switch";
 const char* SWITCH_CONFIRM_TOPIC_FORMAT = "/sprinklers/switchConfirm";
 const char* SWITCH_AVAILABLE_TOPIC = "/sprinklers/available/";
 String REBOOT_TOPIC = "/sprinklers/forceReboot";
-const int FAILSAFE_TIME_LIMIT = 25; // Force a time limit (in munutes) just in case we loose the connection
+const int FAILSAFE_TIME_LIMIT = 60; // Force a time limit (in munutes) just in case we loose the connection
 
 /* Define in private.h
 const char* WIFI_SSID 
@@ -21,7 +21,7 @@ const char* MQTT_PASSWORD
 #include "private.h"
 
 // Add the out pins you want to use 
-const int switchOutputPins[] = {D0, D1, D2, D3};
+const int switchOutputPins[] = {D0, D1, D2, D3, D5};
 
 WiFiClient net;
 MQTTClient mqtt;
@@ -44,7 +44,7 @@ void setupWifi() {
 }
 
 void setupOTAUpdater() {
-  ArduinoOTA.setHostname("Sprinklers");
+  ArduinoOTA.setHostname("SprinklersOTA");
   ArduinoOTA.begin();
   printf("OTA update system startup complete");
 }
@@ -57,7 +57,7 @@ String buildTopic(int index, const char* topic) {
 
 void setupMQTT() {
   Serial.println("Connecting to MQTT");
-  const String clientName = "sprinklers";
+  const String clientName = "Sprinklers";
 
   mqtt.begin(MQTT_SERVER_IP, net);
   mqtt.onMessage(mqttCb);
